@@ -1,6 +1,6 @@
 import express, { Request, Response } from "express";
-// import { Request, Response } from "express-serve-static-core";
 import path from "path";
+import https from 'https';
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 import fetch from "node-fetch"; // Import fetch for Node.js
@@ -15,7 +15,7 @@ const __dirname = dirname(__filename);
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// Endpoint to generate token
+// End point to create user in multiple orgs.
 app.post("/create-user", async (req: Request, res: Response): Promise<void> => {
     try {
         if (!THOUGHTSPOT_HOST || !THOUGHTSPOT_PASSWORD) {
@@ -23,29 +23,63 @@ app.post("/create-user", async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-        const headers = {
+        const agent = new https.Agent({
+          rejectUnauthorized: false
+        });
+
+        const tokenHeaders = {
             "Accept": "application/json",
             "Content-Type": "application/json",
         };
 
         const body = JSON.stringify({
-            user_identifier: u1,
-            display_name: u1,
-            password: Cloud123!,
-
-            account_type: LOCAL_USER,
-            account_status: ACTIVE,
-            email: "u1@gmail.com",
-
-            org_identifiers: [
-                "o1",
-                "o2"
-            ],
-            dry_run: false,
-            delete_unspecified_users: false,
-            notify_on_share: true
+            username: "tsadmin",
+            validity_time_in_sec: 300,
+            auto_create: false,
+            password: "4Xyc1f%[H^3L",
+            secret_key: SECRET_KEY
         });
 
+        const tokenResponse = await fetch(`${THOUGHTSPOT_HOST}/api/rest/2.0/auth/token/full`, {
+            method: "POST",
+            headers: tokenHeaders,
+            body: body,
+            redirect: "follow" as RequestRedirect,
+            agent: agent,
+        });
+
+        const tokenResult = await tokenResponse.json();
+        if (!tokenResponse.ok) {
+            throw new Error(`API error: ${JSON.stringify(tokenResult)}`);
+        }
+
+        const token = tokenResult.token;
+        const bearerToken = `Bearer ${token}`;
+
+        const requestBody: RequestBody = {
+          users: [
+            {
+              user_identifier: "u5", // Make sure that user with this username does not exist
+              display_name: "u5",
+              password: "Cloud123!",
+              account_type: "LOCAL_USER",
+              account_status: "ACTIVE",
+              email: "u5@gmail.com",
+              org_identifiers: [
+                "o1",   // Make sure that org o1 exist in the system
+                "o2"    // Make sure that org o2 exist in the system
+              ],
+            }
+          ],
+          dry_run: false,
+          delete_unspecified_users: false,
+        };
+
+        const headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Authorization": bearerToken,
+        };
 
         const response = await fetch(`${THOUGHTSPOT_HOST}/api/rest/2.0/users/import`, {
             method: "POST",
@@ -55,12 +89,19 @@ app.post("/create-user", async (req: Request, res: Response): Promise<void> => {
         });
 
         const result = await response.json();
+            body: JSON.stringify(requestBody),
+            redirect: "follow" as RequestRedirect,
+            agent: agent,
+        });
+
+        const result = await response.json();
+        console.log('Response: ${JSON.stringify(result)}');
 
         if (!response.ok) {
             throw new Error(`API error: ${JSON.stringify(result)}`);
         }
 
-        res.json({ token: result });
+        res.json({result });
     } catch (error: unknown) {
         console.error("Error creating user:", error);
         res.status(500).json({ error: "Failed to create user", details: (error as Error).message });

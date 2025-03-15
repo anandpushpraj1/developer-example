@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 // ThoughtSpot config
 export const THOUGHTSPOT_HOST = process.env.THOUGHTSPOT_HOST || '';
 
